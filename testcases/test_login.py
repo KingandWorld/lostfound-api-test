@@ -52,8 +52,9 @@ class TestLogin:
         with allure.step("断言登录不成功"):
             body = resp.json()
             assert body.get("code") != "200", f"错误密码不应登录成功: {body}"
-        with allure.step("断言不发放 token（字段名以实际接口为准）"):
-            assert not body["data"].get("token"), "错误密码不应返回 token"
+        with allure.step("断言不发放 token（失败响应无 data 字段，用 get 兜底）"):
+            data = body.get("data") or {}
+            assert not data.get("token"), "错误密码不应返回 token"
 
     @allure.story("异常登录")
     @allure.title("账号密码为空提交，返回参数校验提示")

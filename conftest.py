@@ -1,12 +1,14 @@
-"""全局 fixture：base_url / api_session / login_token / test_data / published_item_id。
+"""全局 fixture：base_url / api_session / login_token / test_data / unique_username / temp_item / published_item_id。
 
 说明：
 - conftest.py 中的 fixture 对该目录下所有用例自动可见，无需 import；
-- 与 week2_day8.md 任务三、week2_day9.md 任务一对应；
+- 与 week2_day8.md 任务三、week2_day9.md 任务一、week2_day10.md 任务三对应；
 - 认证通过自定义 Header `token` 携带（非 Bearer），与 Day6 API 文档一致；
 - login_token 为 session 级：整个测试会话只登录一次，token 注入 session 后自动携带；
 - published_item_id（Day9 新增）：发布一个已知物品供搜索/详情/认领用例复用，
-  会话结束自动删除；只读数据，删除/编辑用例请自造数据，不要动它。
+  会话结束自动删除；只读数据，删除/编辑用例请自造数据，不要动它；
+- unique_username / temp_item（Day10 新增）：唯一用户名生成 + 临时物品自造自删，
+  配合参数化用例做数据隔离。
 """
 
 import pytest
@@ -101,6 +103,75 @@ def test_data():
             "description": "这是我的学生证，学号与照片完全吻合，请求归还。",
         },
     }
+
+
+@pytest.fixture()
+def unique_username():
+    """生成唯一用户名（注册类用例防冲突）。
+
+    Day10 实测：注册接口暂不可用（任何参数组合均返回 code=500"系统错误"），
+    待后端修复后配合 temp_user 使用；当前供需要唯一标识的场景复用。
+    """
+    import time
+
+    return f"auto_{int(time.time() * 1000)}"
+
+
+@pytest.fixture()
+def temp_item(api_session, base_url, first_category_id):
+    """创建一个临时物品，测试结束后自动删除（Day10 新增）。
+
+    替代"发布→按标题回查→用例内 finally 删除"的重复三步：
+    setup  用唯一标题发布物品（POST /api/lost-item），按标题回查列表拿到 ID；
+    yield  {"id": 物品ID, "title": 标题}；
+    teardown 删除该物品（已删过的场景（删除用例）容错忽略）。
+
+    注意：发布响应不含物品 ID（已实测契约），ID 需翻页回查（_find_item 逻辑）。
+    """
+    import time
+
+    title = f"临时物品_{int(time.time() * 1000)}"
+    try:
+        resp = api_session.post(
+            f"{base_url}/api/lost-item",
+            json={
+                "title": title,
+                "description": "temp_item fixture 发布的临时物品，描述足够详细以通过内容完整性校验。",
+                "categoryId": first_category_id,
+                "lostPlace": "测试地点-自习室",
+                "lostTime": "2026-08-01 12:00:00",
+                "contactName": "测试联系人",
+                "contactPhone": "13800000000",
+                "contactEmail": "test@test.com",
+                "status": 0,
+            },
+            timeout=10,
+        )
+        body = resp.json()
+        assert body.get("code") == "200", f"发布临时物品失败: {body}"
+    except requests.exceptions.RequestException as exc:
+        pytest.skip(f"后端不可达，跳过依赖前置数据的用例: {exc}")
+    item_id = None
+    for page in range(1, 6):
+        page_resp = api_session.get(
+            f"{base_url}/api/lost-item/page",
+            params={"currentPage": page, "size": 50},
+            timeout=10,
+        )
+        records = (page_resp.json().get("data") or {}).get("records") or []
+        for rec in records:
+            if rec.get("title") == title:
+                item_id = rec["id"]
+                break
+        if item_id or len(records) < 50:
+            break
+    assert item_id, f"发布后未按标题回查到临时物品: {title}"
+    yield {"id": item_id, "title": title}
+    # teardown：删除临时物品；删除用例可能已删过（返回 code=-1），容错忽略
+    try:
+        api_session.delete(f"{base_url}/api/lost-item/{item_id}", timeout=10)
+    except requests.exceptions.RequestException:
+        pass
 
 
 @pytest.fixture(scope="session")

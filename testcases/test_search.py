@@ -1,10 +1,14 @@
-"""物品搜索接口测试（Day9）：关键词 / 分类筛选 / 空关键词 / 分类无结果 / 分页，共 5 条。
+"""物品搜索接口测试（Day9）：关键词 / 分类筛选 / 空关键词 / 分类无结果 / 分页，共 5 条；
+Day10 新增参数化搜索校验 5 组。
 
 已实测契约（2026-08-03）：
 - keyword 参数被后端忽略（传任意关键词返回相同全量列表）—— 已知系统缺陷，
   关键词用例退化为"目标物品可被列表检索到"，缺陷已记录在测试报告中；
 - categoryId 筛选生效，不存在的分类（99999）返回空列表——"无结果"场景用分类实现；
 - 分页参数为 currentPage/size。
+
+Day10 参数化（2026-08-04 复测）：搜索 = 列表接口参数组合，断言按
+"结构正常 / 分页 / 分类 / 无结果"四类检查点参数化，避免为每个组合复制用例。
 """
 
 import allure
@@ -110,3 +114,61 @@ class TestSearch:
             assert body.get("code") == "200", body
             for r in (body.get("data") or {}).get("records") or []:
                 assert r.get("categoryId") == published_item_id["category_id"], r
+
+
+@allure.feature("物品搜索")
+class TestSearchValidation:
+    """搜索参数化校验（Day10 数据驱动，5 组）。
+
+    search = GET /api/lost-item/page 的参数组合。断言按检查点参数化：
+    - structure：返回码 200 + records 为列表（keyword 被忽略，退化为结构校验）；
+    - paged：records 数量不超过 size；
+    - category：全部记录属于该分类（复用 published_item_id 的分类）；
+    - empty：返回空列表（不存在的分类 99999，已知 keyword 无法产生空结果）。
+    """
+
+    SEARCH_VALIDATION_CASES = [
+        # (params, check, case_id)
+        ({"keyword": ""}, "structure", "空关键词返回全量列表结构正常"),
+        ({"keyword": "测试", "size": 2}, "paged", "关键词+分页（keyword 被忽略，仅验分页）"),
+        (None, "category", "分类筛选属于该分类"),
+        ({"categoryId": 99999}, "empty", "不存在的分类返回空列表"),
+        (None, "paged", "分类+翻页（currentPage=2 size=1）"),
+    ]
+
+    @pytest.mark.parametrize(
+        "params,check,case_id",
+        SEARCH_VALIDATION_CASES,
+        ids=[c[2] for c in SEARCH_VALIDATION_CASES],
+    )
+    @allure.story("搜索参数化校验")
+    @allure.title("搜索参数组合校验（{case_id}）")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_search_validation(self, api_session, base_url, published_item_id, params, check, case_id):
+        with allure.step(f"构造搜索参数：{case_id}"):
+            request_params = dict(params or {})
+            if check in ("category", "paged"):
+                if not published_item_id.get("category_id"):
+                    pytest.skip("系统物品未使用分类，跳过本用例")
+                request_params["categoryId"] = published_item_id["category_id"]
+            if check == "paged":
+                request_params.update({"currentPage": 2, "size": 1})
+        with allure.step("发送搜索请求"):
+            resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
+                            params=request_params)
+            body = resp.json()
+            records = (body.get("data") or {}).get("records") or []
+            assert body.get("code") == "200", body
+        if check == "structure":
+            with allure.step("断言结构正常"):
+                assert isinstance(records, list), body
+        elif check == "paged":
+            with allure.step("断言数量不超过 size"):
+                assert len(records) <= 1, body
+        elif check == "category":
+            with allure.step("断言全部记录属于该分类"):
+                for r in records:
+                    assert r.get("categoryId") == published_item_id["category_id"], r
+        elif check == "empty":
+            with allure.step("断言返回空列表"):
+                assert len(records) == 0, body

@@ -1,6 +1,6 @@
-"""物品模块接口测试（Day9）：列表 / 详情 / 发布 / 编辑 / 删除，共 10 条。
+"""物品模块接口测试（Day9）：列表 / 详情 / 发布 / 编辑 / 删除，共 10 条；Day10 新增参数化发布校验 10 组。
 
-已实测契约（2026-08-03 对真实后端探测确认）：
+已实测契约（2026-08-03 / 2026-08-04 对真实后端探测确认）：
 - 发布：POST /api/lost-item（前端实际路径），必填 title/description/categoryId/
   lostTime/contactName，description 过短返回 code=-1"发布内容过于简单"；
   userId 可省略（服务端从 token 解析）；
@@ -8,7 +8,11 @@
 - 列表分页参数为 currentPage/size（page/pageSize 被忽略），响应分页字段为 total；
 - 详情：无效 ID 返回 code=-1 且无 data（非 HTTP 404）；
 - 编辑：PUT /api/lost-item/{id}，body 同发布；
-- 删除：DELETE /api/lost-item/{id}，删除后回查返回 code=-1。
+- 删除：DELETE /api/lost-item/{id}，删除后回查返回 code=-1；
+- 标题长度（Day10 实测）：≥2 且 ≤100 字符（1 字符"标题长度不能少于2个字符"、
+  101+ 字符"标题长度不能超过100个字符"，50/51 字符均可发布——与 Day10 文档
+  中"1-50 字符"的旧描述不符，以实测为准）；空标题/缺 categoryId/过短描述均被拒绝；
+  特殊字符、中文、emoji 标题均可发布。
 """
 
 import time
@@ -234,3 +238,66 @@ class TestItemDelete:
         with allure.step("再次获取详情，确认已删除（已实测：返回 code=-1）"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/{item_id}")
             assert resp.json().get("code") != "200", resp.json()
+
+
+@allure.feature("物品管理")
+class TestItemCreateValidation:
+    """发布物品参数化校验（Day10 数据驱动，10 组）。
+
+    已实测契约（2026-08-04）：
+    - 标题长度 ≥2 且 ≤100 字符（1 字符 / 101 字符被拒，50/51 字符均可发布，
+      Day10 文档中"1-50 字符"的旧描述不准确，以实测为准）；
+    - 空标题、缺 categoryId、过短 description 均返回 code=-1 + 提示；
+    - 特殊字符 / 中文标题可正常发布。
+    成功组用例内回查 + 删除清理（标题加时间戳后缀防重名）。
+    """
+
+    CREATE_VALIDATION_CASES = [
+        # (title, category_id, description, expected, case_id)
+        ("边界最短标题", 1, None, "success", "2字符最短标题"),
+        ("T" * 100, 1, None, "success", "100字符标题上限边界"),
+        ("正常物品标题", 1, None, "success", "正常标题"),
+        ("测试物品<>&'\"\\", 1, None, "success", "特殊字符标题"),
+        ("书包", 1, None, "success", "中文标题"),
+        ("A", 1, None, "fail", "1字符标题（少于2字符）"),
+        ("T" * 101, 1, None, "fail", "101字符标题（超过100字符）"),
+        ("", 1, None, "fail", "空标题"),
+        ("有标题无分类", None, None, "fail", "缺少分类categoryId"),
+        ("过短描述", 1, "短", "fail", "描述过短（内容过于简单）"),
+    ]
+
+    @pytest.mark.parametrize(
+        "title,category_id,description,expected,case_id",
+        CREATE_VALIDATION_CASES,
+        ids=[c[4] for c in CREATE_VALIDATION_CASES],
+    )
+    @allure.story("发布物品参数化校验")
+    @allure.title("发布物品边界校验（{case_id}）")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_item_validation(self, api_session, base_url, title, category_id,
+                                    description, expected, case_id):
+        payload = _item_payload(title, category_id)
+        if description is not None:
+            payload["description"] = description
+        with allure.step(f"构造发布请求体：{case_id}"):
+            if expected == "success":
+                # 成功组标题加时间戳后缀防重名；标题长度上限 100 字符（已实测），
+                # 加后缀前截断，保证"100字符上限边界"组发布后仍恰好 100 字符
+                suffix = f"_{int(time.time() * 1000)}"
+                title = f"{title[:100 - len(suffix)]}{suffix}"
+                payload["title"] = title
+        with allure.step("发送发布请求（POST /api/lost-item）"):
+            resp = _request(api_session, "POST", f"{base_url}/api/lost-item", json=payload)
+            body = resp.json()
+        if expected == "success":
+            with allure.step("断言发布成功"):
+                assert body.get("code") == "200", f"合法参数不应发布失败: {body}"
+            with allure.step("回查列表确认物品已入库"):
+                rec = _find_item(api_session, base_url, title)
+                assert rec, f"发布成功但未在列表回查到: {title}"
+            with allure.step("清理：删除刚发布的物品"):
+                _request(api_session, "DELETE", f"{base_url}/api/lost-item/{rec['id']}")
+        else:
+            with allure.step("断言发布被拒绝并返回提示"):
+                assert body.get("code") != "200", f"非法参数不应发布成功: {body}"
+                assert body.get("msg"), f"应返回失败提示: {body}"

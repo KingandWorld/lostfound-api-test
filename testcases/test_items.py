@@ -21,6 +21,8 @@ import allure
 import pytest
 import requests
 
+from utils.allure_helper import attach_request_response
+
 
 def _request(session, method, url, **kwargs):
     """发送请求；后端不可达时跳过用例（沿用 Day8 写法）。"""
@@ -77,6 +79,7 @@ class TestItemList:
     def test_get_items_list(self, api_session, base_url):
         with allure.step("发送 GET /api/lost-item/page"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page")
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言响应码为 200"):
             body = resp.json()
             assert body.get("code") == "200", f"获取列表失败: {body}"
@@ -94,6 +97,7 @@ class TestItemList:
                 api_session, "GET", f"{base_url}/api/lost-item/page",
                 params={"currentPage": 1, "size": 2},
             )
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回数量不超过 2 条"):
             body = resp.json()
             records = (body.get("data") or {}).get("records") or []
@@ -108,6 +112,7 @@ class TestItemList:
                 api_session, "GET", f"{base_url}/api/lost-item/page",
                 params={"currentPage": 99999, "size": 10},
             )
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回空列表"):
             body = resp.json()
             assert body.get("code") == "200", body
@@ -125,6 +130,7 @@ class TestItemDetail:
         with allure.step(f"请求详情：GET /api/lost-item/{published_item_id['id']}"):
             resp = _request(api_session, "GET",
                             f"{base_url}/api/lost-item/{published_item_id['id']}")
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回目标物品且标题一致"):
             body = resp.json()
             assert body.get("code") == "200", body
@@ -138,6 +144,7 @@ class TestItemDetail:
     def test_get_item_invalid_id(self, api_session, base_url):
         with allure.step("请求超大 ID 的详情"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/999999999")
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回失败（已实测：code=-1 且无 data）"):
             body = resp.json()
             assert body.get("code") != "200", body
@@ -154,6 +161,7 @@ class TestItemCreate:
             title = f"自动化发布物品_{int(time.time() * 1000)}"
             resp = _request(api_session, "POST", f"{base_url}/api/lost-item",
                             json=_item_payload(title, first_category_id))
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言发布成功"):
             body = resp.json()
             assert body.get("code") == "200", f"发布失败: {body}"
@@ -170,6 +178,7 @@ class TestItemCreate:
         with allure.step("发送缺少标题的请求体"):
             resp = _request(api_session, "POST", f"{base_url}/api/lost-item",
                             json=test_data["items"]["missing_required"])
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言发布失败并返回校验提示"):
             body = resp.json()
             assert body.get("code") != "200", f"缺少必填字段不应发布成功: {body}"
@@ -183,6 +192,7 @@ class TestItemCreate:
             anon = requests.Session()  # 未注入 token 头
             resp = _request(anon, "POST", f"{base_url}/api/lost-item",
                             json=_item_payload("匿名发布物品", first_category_id))
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回 401（已实测：未登录返回 HTTP 401 认证失败）"):
             assert resp.status_code == 401, (resp.status_code, resp.text[:200])
 
@@ -207,6 +217,7 @@ class TestItemUpdate:
                 new_title = f"{title}_已编辑"
                 resp = _request(api_session, "PUT", f"{base_url}/api/lost-item/{item_id}",
                                 json=_item_payload(new_title, first_category_id))
+                attach_request_response(resp)  # Day11：请求/响应附加进报告
                 assert resp.json().get("code") == "200", resp.json()
             with allure.step("重新获取详情确认标题已更新"):
                 resp = _request(api_session, "GET", f"{base_url}/api/lost-item/{item_id}")
@@ -234,6 +245,7 @@ class TestItemDelete:
             item_id = rec["id"]
         with allure.step("DELETE 删除该物品"):
             resp = _request(api_session, "DELETE", f"{base_url}/api/lost-item/{item_id}")
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
             assert resp.json().get("code") == "200", resp.json()
         with allure.step("再次获取详情，确认已删除（已实测：返回 code=-1）"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/{item_id}")
@@ -288,6 +300,7 @@ class TestItemCreateValidation:
                 payload["title"] = title
         with allure.step("发送发布请求（POST /api/lost-item）"):
             resp = _request(api_session, "POST", f"{base_url}/api/lost-item", json=payload)
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
             body = resp.json()
         if expected == "success":
             with allure.step("断言发布成功"):

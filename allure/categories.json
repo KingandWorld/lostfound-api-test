@@ -1,0 +1,7 @@
+[
+  {"name": "接口超时", "matchedStatuses": ["broken"], "traceRegex": ".*(Timeout|timed out|timedout).*"},
+  {"name": "环境不可达", "matchedStatuses": ["broken"], "traceRegex": ".*(ConnectionError|NewConnectionError|ConnectTimeout|MaxRetryError|NameResolutionError).*"},
+  {"name": "断言失败", "matchedStatuses": ["failed"], "traceRegex": ".*AssertionError.*"},
+  {"name": "已知Bug", "matchedStatuses": ["failed", "broken"], "messageRegex": ".*KNOWN_BUG.*"},
+  {"name": "测试跳过", "matchedStatuses": ["skipped"]}
+]

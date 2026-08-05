@@ -14,6 +14,7 @@ import allure
 import pytest
 import requests
 
+from utils.allure_helper import attach_request_response
 from utils.db_utils import DBUtils
 
 
@@ -88,6 +89,7 @@ class TestDbChecks:
                             json={"username": unique_username,
                                   "password": "Test123456",
                                   "nickName": "数据库校验用户"})
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
             body = resp.json()
         if body.get("code") != "200":
             # 已实测（2026-08-04）：注册接口返回 code=500"系统错误"，后端缺陷；
@@ -110,6 +112,7 @@ class TestDbChecks:
             title = f"数据库校验物品_{int(time.time() * 1000)}"
             resp = _request(api_session, "POST", f"{base_url}/api/lost-item",
                             json=_item_payload(title, first_category_id))
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
             assert resp.json().get("code") == "200", resp.json()
         try:
             with allure.step("查询物品表确认记录存在（表名/字段以真实库为准）"):
@@ -137,6 +140,7 @@ class TestDbChecks:
             assert rec, f"未回查到临时物品: {title}"
         with allure.step("通过接口删除物品"):
             resp = _request(api_session, "DELETE", f"{base_url}/api/lost-item/{rec['id']}")
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
             assert resp.json().get("code") == "200", resp.json()
         with allure.step("查询数据库确认记录已删除"):
             rows = _safe_query(db_conn, "SELECT * FROM lost_item WHERE id=%s", (rec["id"],))
@@ -151,6 +155,7 @@ class TestDbChecks:
         with allure.step("调用登录接口（账号密码来自 .env 配置）"):
             resp = _request(api_session, "POST", f"{base_url}/api/user/login",
                             json=test_data["login"]["success"])
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
             assert resp.json().get("code") == "200", resp.json()
         with allure.step("查询用户表登录时间字段（字段名以真实库为准）"):
             rows = _safe_query(

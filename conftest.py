@@ -1,20 +1,39 @@
-"""全局 fixture：base_url / api_session / login_token / test_data / unique_username / temp_item / published_item_id。
+"""全局 fixture：base_url / api_session / login_token / test_data / unique_username / temp_item / published_item_id；
+Day11 新增 Allure 定制钩子：environment.properties 自动生成 / categories.json 注入 / 失败用例自动附加请求响应。
 
 说明：
 - conftest.py 中的 fixture 对该目录下所有用例自动可见，无需 import；
-- 与 week2_day8.md 任务三、week2_day9.md 任务一、week2_day10.md 任务三对应；
+- 与 week2_day8.md 任务三、week2_day9.md 任务一、week2_day10.md 任务三、
+  week2_day11.md 任务二/三对应；
 - 认证通过自定义 Header `token` 携带（非 Bearer），与 Day6 API 文档一致；
 - login_token 为 session 级：整个测试会话只登录一次，token 注入 session 后自动携带；
 - published_item_id（Day9 新增）：发布一个已知物品供搜索/详情/认领用例复用，
   会话结束自动删除；只读数据，删除/编辑用例请自造数据，不要动它；
 - unique_username / temp_item（Day10 新增）：唯一用户名生成 + 临时物品自造自删，
-  配合参数化用例做数据隔离。
+  配合参数化用例做数据隔离；
+- pytest_sessionstart（Day11 新增）：测试开始前把 environment.properties（环境信息）
+  和 allure/categories.json（自定义缺陷分类）写入 allure-results 目录，
+  生成报告时 Allure 自动读取；
+- pytest_runtest_makereport（Day11 新增）：用例失败时自动附加该用例最近一次
+  请求/响应详情（截断 2000 字符），与 utils/allure_helper.py 配合避免重复附加。
 """
 
+import os
+import shutil
+import sys
+from datetime import datetime
+
+import allure
 import pytest
 import requests
 
 from config.settings import BASE_URL, TEST_USERNAME, TEST_PASSWORD
+from utils.allure_helper import (
+    attach_request_response,
+    get_last_response,
+    has_attached_in_test,
+    reset_for_test,
+)
 
 
 @pytest.fixture(scope="session")
@@ -231,3 +250,69 @@ def published_item_id(api_session, base_url, first_category_id):
     yield {"id": item_id, "title": title, "category_id": first_category_id}
     # teardown：会话结束删除，避免污染后续天数的数据
     api_session.delete(f"{base_url}/api/lost-item/{item_id}", timeout=10)
+
+
+# ---------------------------------------------------------------------------
+# Day11：Allure 报告定制钩子
+# ---------------------------------------------------------------------------
+
+def pytest_sessionstart(session):
+    """测试会话开始前，把环境信息与自定义分类写入 allure-results。
+
+    - environment.properties：Allure Overview 页面的环境信息块（环境名/BaseURL/
+      Python 版本/平台/测试人员/测试日期/服务器规格）；
+    - categories.json：自定义缺陷分类（接口超时/环境不可达/断言失败/已知Bug），
+      模板放在项目 allure/ 目录，复制到结果目录后生成报告时生效。
+
+    为什么用 pytest_sessionstart 而不是 pytest_configure（week2_day11.md
+    任务二原方案）：addopts 中带 --clean-alluredir 时，allure-pytest 会在
+    pytest_configure 阶段清空结果目录——不同版本清空与写入的先后顺序不稳定，
+    可能把刚写好的 environment.properties 清掉。sessionstart 在配置完成后、
+    首个用例执行前触发，与 clean 时序天然无冲突。
+    """
+    allure_dir = session.config.getoption("--alluredir") or "./allure-results"
+    os.makedirs(allure_dir, exist_ok=True)
+
+    env_props = f"""\
+TestEnvironment=测试环境（真实后端）
+BaseURL={BASE_URL}
+PythonVersion={sys.version.split()[0]}
+Platform={sys.platform}
+Tester=测试学员
+TestDate={datetime.now().strftime("%Y-%m-%d %H:%M")}
+ServerMemory=4G轻量云服务器
+"""
+    with open(os.path.join(allure_dir, "environment.properties"), "w", encoding="utf-8") as f:
+        f.write(env_props)
+
+    categories = os.path.join(os.path.dirname(__file__), "allure", "categories.json")
+    if os.path.exists(categories):
+        shutil.copy(categories, os.path.join(allure_dir, "categories.json"))
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """用例失败时自动附加最近一次请求/响应详情（Day11 任务三）。
+
+    机制（与 utils/allure_helper.py 配合）：
+    - 每个用例开始时 reset_for_test() 清空记录；
+    - 用例内 attach_request_response(resp) 会"附加 + 记录"；remember_response(resp)
+      只记录不附加（模拟用例未主动附加的场景）；
+    - 用例失败时：若本用例还没主动附加过，就把最近一次记录的响应补一份附件
+      （名为"失败用例自动附加的请求/响应详情"）；完全没有响应可附加时（如
+      fixture 阶段失败），附加一条说明文本，避免空失败无从查起。
+    """
+    outcome = yield
+    report = outcome.get_result()
+    if report.when == "setup":
+        reset_for_test()
+    if report.failed and report.when in ("call", "teardown"):
+        resp = get_last_response()
+        if resp is not None and not has_attached_in_test():
+            attach_request_response(resp, name="失败用例自动附加的请求/响应详情")
+        elif resp is None:
+            allure.attach(
+                "该用例在发送请求前失败（如 fixture 阶段异常），没有可附加的响应。",
+                "失败说明",
+                allure.attachment_type.TEXT,
+            )

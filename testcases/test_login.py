@@ -21,6 +21,8 @@ import allure
 import pytest
 import requests
 
+from utils.allure_helper import attach_request_response
+
 
 def _request(session, method, url, **kwargs):
     """发送请求；后端不可达时跳过用例，避免环境问题中断学习流程。"""
@@ -42,6 +44,7 @@ class TestLogin:
             payload = test_data["login"]["success"]
         with allure.step(f"发送登录请求：POST {base_url}/api/user/login"):
             resp = _request(api_session, "POST", f"{base_url}/api/user/login", json=payload)
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言响应码为 200"):
             body = resp.json()
             assert body.get("code") == "200", f"登录失败: {body}"
@@ -58,6 +61,7 @@ class TestLogin:
             payload = test_data["login"]["wrong_password"]
         with allure.step("发送登录请求"):
             resp = _request(api_session, "POST", f"{base_url}/api/user/login", json=payload)
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言登录不成功"):
             body = resp.json()
             assert body.get("code") != "200", f"错误密码不应登录成功: {body}"
@@ -73,6 +77,7 @@ class TestLogin:
             payload = test_data["login"]["empty_fields"]
         with allure.step("发送登录请求"):
             resp = _request(api_session, "POST", f"{base_url}/api/user/login", json=payload)
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言登录不成功"):
             body = resp.json()
             assert body.get("code") != "200", f"空表单不应登录成功: {body}"
@@ -85,6 +90,7 @@ class TestLogin:
             payload = test_data["login"]["nonexistent_user"]
         with allure.step("发送登录请求"):
             resp = _request(api_session, "POST", f"{base_url}/api/user/login", json=payload)
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言登录不成功"):
             body = resp.json()
             assert body.get("code") != "200", f"不存在用户不应登录成功: {body}"
@@ -137,6 +143,7 @@ class TestLoginValidation:
             payload["password"] = password
         with allure.step("发送登录请求"):
             resp = _request(api_session, "POST", f"{base_url}/api/user/login", json=payload)
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言登录失败且返回提示"):
             body = resp.json()
             assert body.get("code") != "200", f"非法参数不应登录成功: {body}"

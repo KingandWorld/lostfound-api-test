@@ -19,6 +19,7 @@ import pytest
 import requests
 
 from config.settings import TEST_USERNAME
+from utils.allure_helper import attach_request_response
 
 
 def _request(session, method, url, **kwargs):
@@ -108,6 +109,7 @@ class TestClaim:
         with allure.step("发起认领请求（POST /api/claim）"):
             resp = _request(api_session, "POST", f"{base_url}/api/claim",
                             json=_claim_payload(others_item["id"], others_item["item_type"]))
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言认领成功"):
             body = resp.json()
             assert body.get("code") == "200", f"认领失败: {body}"
@@ -128,6 +130,7 @@ class TestClaim:
         with allure.step("第二次认领同一物品"):
             resp2 = _request(api_session, "POST", f"{base_url}/api/claim",
                              json=_claim_payload(others_item["id"], others_item["item_type"]))
+            attach_request_response(resp2)  # Day11：请求/响应附加进报告
             body2 = resp2.json()
         with allure.step("断言第二次被拒绝并返回原因"):
             assert body2.get("code") != "200", f"重复认领不应成功: {body2}"
@@ -141,6 +144,7 @@ class TestClaim:
         with allure.step(f"认领自己发布的物品 {published_item_id['id']}"):
             resp = _request(api_session, "POST", f"{base_url}/api/claim",
                             json=_claim_payload(published_item_id["id"]))
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言被系统拒绝"):
             body = resp.json()
             assert body.get("code") != "200", f"认领自己的物品应被拒绝: {body}"
@@ -153,6 +157,7 @@ class TestClaim:
         with allure.step("认领一个不存在的物品 ID"):
             resp = _request(api_session, "POST", f"{base_url}/api/claim",
                             json=_claim_payload(999999999))
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回错误提示"):
             body = resp.json()
             assert body.get("code") != "200", f"认领不存在物品不应成功: {body}"
@@ -165,6 +170,7 @@ class TestClaim:
         with allure.step("发起认领"):
             resp = _request(api_session, "POST", f"{base_url}/api/claim",
                             json=_claim_payload(others_item["id"], others_item["item_type"]))
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
             assert resp.json().get("code") == "200", resp.json()
         with allure.step("查询我的认领列表，断言认领单存在且状态为待审核"):
             resp = _request(api_session, "GET", f"{base_url}/api/claim/my",

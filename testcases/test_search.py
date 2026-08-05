@@ -15,6 +15,8 @@ import allure
 import pytest
 import requests
 
+from utils.allure_helper import attach_request_response
+
 
 def _request(session, method, url, **kwargs):
     """发送请求；后端不可达时跳过用例（沿用 Day8 写法）。"""
@@ -51,6 +53,7 @@ class TestSearch:
         with allure.step(f"用目标物品标题搜索：{published_item_id['title']}"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
                             params={"keyword": published_item_id["title"]})
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回码 200 且目标物品在结果中"):
             body = resp.json()
             assert body.get("code") == "200", body
@@ -66,6 +69,7 @@ class TestSearch:
         with allure.step("按不存在的分类筛选"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
                             params={"categoryId": test_data["search"]["no_result_category_id"]})
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回空列表"):
             body = resp.json()
             assert body.get("code") == "200", body
@@ -79,6 +83,7 @@ class TestSearch:
         with allure.step("发送空关键词请求"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
                             params={"keyword": ""})
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回码 200 且结构正常"):
             body = resp.json()
             assert body.get("code") == "200", body
@@ -93,6 +98,7 @@ class TestSearch:
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
                             params={"categoryId": published_item_id["category_id"],
                                     "currentPage": 1, "size": 2})
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言数量不超过 2 条且都属于该分类"):
             body = resp.json()
             records = (body.get("data") or {}).get("records") or []
@@ -109,6 +115,7 @@ class TestSearch:
         with allure.step(f"按分类 ID 筛选：{published_item_id['category_id']}"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
                             params={"categoryId": published_item_id["category_id"]})
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回物品都属于该分类"):
             body = resp.json()
             assert body.get("code") == "200", body
@@ -156,6 +163,7 @@ class TestSearchValidation:
         with allure.step("发送搜索请求"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
                             params=request_params)
+            attach_request_response(resp)  # Day11：请求/响应附加进报告
             body = resp.json()
             records = (body.get("data") or {}).get("records") or []
             assert body.get("code") == "200", body

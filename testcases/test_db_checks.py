@@ -3,8 +3,9 @@
 设计说明：
 - db_conn fixture（session 级）：连接失败（本机到服务器 MySQL 不可达，已实测
   连接超时）→ pytest.skip，数据库校验整体跳过，以 API 响应验证替代；
-- 注册入库用例：注册接口 2026-08-04 实测返回 code=500"系统错误"（后端缺陷，
-  任意参数组合均失败），用例内 skip 保护——后端修复后自动恢复；
+- 注册入库用例：注册接口按 API 文档 v3.3（源码确认）为 POST /api/user/add，
+  必填 username/password/email/name + agreementAccepted=true（初版误用
+  /api/user/register 不存在返回 500，已按 API 文档修正）；
 - 真实库表名/字段名以实际为准：查询前先核对结构，表/字段不符时 skip 并
   打印真实结构（接入真实库后按输出调整 SQL）；
 - 造的数据（物品）按"API 删除 + DB 兜底删除"双通道清理。
@@ -53,7 +54,7 @@ def _find_item(api_session, base_url, title, max_pages=5):
 
 
 def _item_payload(title, category_id):
-    """构造发布物品请求体（与 test_items.py 契约一致）。"""
+    """构造发布物品请求体（与 test_items.py 契约一致，字段以 API 文档为准）。"""
     return {
         "title": title,
         "description": "这是一条用于数据库校验测试的失物描述，内容足够详细，"
@@ -62,10 +63,9 @@ def _item_payload(title, category_id):
         "categoryId": category_id,
         "lostPlace": "测试地点-图书馆二楼自习区",
         "lostTime": "2026-08-01 12:00:00",
+        "images": "",
         "contactName": "测试联系人",
         "contactPhone": "13800000000",
-        "contactEmail": "test@test.com",
-        "status": 0,
     }
 
 
@@ -84,18 +84,18 @@ class TestDbChecks:
     @allure.title("注册新用户后，users 表出现对应记录")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_register_creates_db_record(self, api_session, base_url, db_conn, unique_username):
+        # 契约（API 文档 v3.3 源码确认）：注册 = POST /api/user/add（公开）；
+        # 必填 username(3-50位字母数字)/password/email(唯一)/name + agreementAccepted=true。
+        # 初版误用 /api/user/register（接口不存在）返回 500，已按 API 文档修正。
         with allure.step("调用注册接口创建新用户"):
-            resp = _request(api_session, "POST", f"{base_url}/api/user/register",
+            resp = _request(api_session, "POST", f"{base_url}/api/user/add",
                             json={"username": unique_username,
                                   "password": "Test123456",
-                                  "nickName": "数据库校验用户"})
+                                  "email": f"{unique_username}@test.com",
+                                  "name": "数据库校验用户",
+                                  "agreementAccepted": True})
             attach_request_response(resp)  # Day11：请求/响应附加进报告
-            body = resp.json()
-        if body.get("code") != "200":
-            # 已实测（2026-08-04）：注册接口返回 code=500"系统错误"，后端缺陷；
-            # 后端修复后本用例自动恢复
-            pytest.skip(f"注册接口暂不可用（实测 code={body.get('code')} {body.get('msg')}），"
-                        f"无法构造新用户做入库校验")
+            assert resp.json().get("code") == "200", resp.json()
         with allure.step("查询 users 表确认新增记录"):
             rows = _safe_query(db_conn, "SELECT * FROM users WHERE username=%s", (unique_username,))
             assert rows, f"注册成功但 users 表无记录: {unique_username}"

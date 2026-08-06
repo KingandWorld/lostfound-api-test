@@ -112,8 +112,9 @@ def test_data():
             "missing_required": {"description": "缺少标题的物品"},
         },
         "search": {
-            # 已实测（2026-08-03）：后端忽略 keyword 参数（过滤未实现，已知缺陷）；
-            # "无结果"场景改用不存在的分类 ID 实现
+            # 源码确认（week1_day6 API 文档 v3.3）：列表筛选参数为 title / categoryId /
+            # status / userId，无 keyword 参数（初版误用 keyword，已按 API 文档修正）；
+            # title 留空=不筛选；"无结果"场景用不存在的分类 ID 实现
             "no_result_category_id": 99999,
         },
         "claim": {
@@ -128,12 +129,13 @@ def test_data():
 def unique_username():
     """生成唯一用户名（注册类用例防冲突）。
 
-    Day10 实测：注册接口暂不可用（任何参数组合均返回 code=500"系统错误"），
-    待后端修复后配合 temp_user 使用；当前供需要唯一标识的场景复用。
+    按 API 文档（week1_day6 v3.3）：注册 POST /api/user/add，username 为
+    3-50 位字母数字（不含下划线），email 唯一且必填——用户名取字母+时间戳。
+    注册入库用例在数据库可达时使用；当前 DB 不可达，用例整体跳过。
     """
     import time
 
-    return f"auto_{int(time.time() * 1000)}"
+    return f"auto{int(time.time() * 1000)}"
 
 
 @pytest.fixture()
@@ -159,10 +161,9 @@ def temp_item(api_session, base_url, first_category_id):
                 "categoryId": first_category_id,
                 "lostPlace": "测试地点-自习室",
                 "lostTime": "2026-08-01 12:00:00",
+                "images": "",
                 "contactName": "测试联系人",
                 "contactPhone": "13800000000",
-                "contactEmail": "test@test.com",
-                "status": 0,
             },
             timeout=10,
         )
@@ -220,10 +221,9 @@ def published_item_id(api_session, base_url, first_category_id):
                 "categoryId": first_category_id,
                 "lostPlace": "测试地点-图书馆二楼",
                 "lostTime": "2026-08-01 12:00:00",
+                "images": "",
                 "contactName": "测试联系人",
                 "contactPhone": "13800000000",
-                "contactEmail": "test@test.com",
-                "status": 0,
             },
             timeout=10,
         )

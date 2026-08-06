@@ -1,10 +1,11 @@
 """物品搜索接口测试（Day9）：关键词 / 分类筛选 / 空关键词 / 分类无结果 / 分页，共 5 条；
 Day10 新增参数化搜索校验 5 组。
 
-已实测契约（2026-08-03）：
-- keyword 参数被后端忽略（传任意关键词返回相同全量列表）—— 已知系统缺陷，
-  关键词用例退化为"目标物品可被列表检索到"，缺陷已记录在测试报告中；
-- categoryId 筛选生效，不存在的分类（99999）返回空列表——"无结果"场景用分类实现；
+接口契约（以 week1_day6 示例-失物招领系统API文档 v3.3 源码确认版为准，2026-08-06 修订）：
+- 列表/搜索 = GET /api/lost-item/page，筛选参数为 title / categoryId / status / userId，
+  **无 keyword 参数**（初版误用 keyword，按 API 文档修正为 title）；
+- title 留空 = 不筛选（源码确认）；categoryId 筛选生效，不存在的分类（99999）
+  返回空列表——"无结果"场景用分类实现；
 - 分页参数为 currentPage/size。
 
 Day10 参数化（2026-08-04 复测）：搜索 = 列表接口参数组合，断言按
@@ -48,11 +49,11 @@ class TestSearch:
     @allure.title("按关键词搜索，目标物品可被检索到")
     @allure.severity(allure.severity_level.BLOCKER)
     def test_search_by_keyword(self, api_session, base_url, published_item_id):
-        # 已知缺陷：后端忽略 keyword 参数（返回全量列表），本用例退化为验证
-        # 目标物品可被列表检索到；修复后端过滤后可收紧为"结果包含且仅包含目标物品"
-        with allure.step(f"用目标物品标题搜索：{published_item_id['title']}"):
+        # 源码确认：列表筛选参数为 title（无 keyword 参数），title 留空=不筛选；
+        # 按标题筛选后目标物品应出现在结果中
+        with allure.step(f"按标题筛选：{published_item_id['title']}"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
-                            params={"keyword": published_item_id["title"]})
+                            params={"title": published_item_id["title"]})
             attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回码 200 且目标物品在结果中"):
             body = resp.json()
@@ -64,8 +65,8 @@ class TestSearch:
     @allure.title("按不存在的分类筛选，返回空结果")
     @allure.severity(allure.severity_level.NORMAL)
     def test_search_no_result(self, api_session, base_url, test_data):
-        # 原"不存在的关键词"用例：已实测后端忽略 keyword 参数无法产生空结果，
-        # 改为用不存在的分类 ID 实现"无结果"边界场景
+        # 原"不存在的关键词"用例：列表筛选参数为 title（无 keyword 参数）；
+        # "无结果"边界场景用不存在的分类 ID（99999）实现
         with allure.step("按不存在的分类筛选"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
                             params={"categoryId": test_data["search"]["no_result_category_id"]})
@@ -80,9 +81,9 @@ class TestSearch:
     @allure.title("空关键词搜索，等价于获取全部列表")
     @allure.severity(allure.severity_level.NORMAL)
     def test_search_empty_keyword(self, api_session, base_url):
-        with allure.step("发送空关键词请求"):
+        with allure.step("发送标题留空请求（title 留空=不筛选）"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
-                            params={"keyword": ""})
+                            params={"title": ""})
             attach_request_response(resp)  # Day11：请求/响应附加进报告
         with allure.step("断言返回码 200 且结构正常"):
             body = resp.json()
@@ -93,7 +94,7 @@ class TestSearch:
     @allure.title("分类筛选带分页参数，返回数量不超过 size 且都属于该分类")
     @allure.severity(allure.severity_level.NORMAL)
     def test_search_with_pagination(self, api_session, base_url, published_item_id):
-        # keyword 不生效，改用 categoryId + 分页组合验证搜索参数叠加
+        # categoryId + 分页组合验证筛选与分页参数叠加
         with allure.step("分类 + 分页参数组合搜索"):
             resp = _request(api_session, "GET", f"{base_url}/api/lost-item/page",
                             params={"categoryId": published_item_id["category_id"],
@@ -128,16 +129,16 @@ class TestSearchValidation:
     """搜索参数化校验（Day10 数据驱动，5 组）。
 
     search = GET /api/lost-item/page 的参数组合。断言按检查点参数化：
-    - structure：返回码 200 + records 为列表（keyword 被忽略，退化为结构校验）；
+    - structure：返回码 200 + records 为列表（title 留空=不筛选，退化为结构校验）；
     - paged：records 数量不超过 size；
     - category：全部记录属于该分类（复用 published_item_id 的分类）；
-    - empty：返回空列表（不存在的分类 99999，已知 keyword 无法产生空结果）。
+    - empty：返回空列表（不存在的分类 99999；筛选参数以 API 文档源码确认为准）。
     """
 
     SEARCH_VALIDATION_CASES = [
         # (params, check, case_id)
-        ({"keyword": ""}, "structure", "空关键词返回全量列表结构正常"),
-        ({"keyword": "测试", "size": 2}, "paged", "关键词+分页（keyword 被忽略，仅验分页）"),
+        ({"title": ""}, "structure", "标题留空返回全量列表结构正常"),
+        ({"title": "", "size": 2}, "paged", "标题留空+分页（title 留空=不筛选，仅验分页）"),
         (None, "category", "分类筛选属于该分类"),
         ({"categoryId": 99999}, "empty", "不存在的分类返回空列表"),
         (None, "paged", "分类+翻页（currentPage=2 size=1）"),

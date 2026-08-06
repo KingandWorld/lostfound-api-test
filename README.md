@@ -13,14 +13,16 @@
 - 登录：`POST /api/user/login`，请求体 `{"username": "xxx", "password": "xxx"}`；
   成功响应 `{"code": "200", "data": {"token": "xxx", ...}}`；
   认证方式：后续请求在 Header 携带自定义 `token: <token>`（**非 Bearer**）
-- 物品列表/搜索：`GET /api/lost-item/page`；⚠️ 分页参数为 `currentPage`/`size`
-  （`page`/`pageSize` 会被后端忽略），响应分页字段为 `records/total/size/current/pages`
-- ⚠️ `keyword` 参数被后端忽略（过滤未实现，已知缺陷）；`categoryId` 筛选有效；
-  不存在的分类返回空列表
-- ⚠️ 发布物品：`POST /api/lost-item`（**不是** `/api/lost-item/add`），必填
-  `title/description/categoryId/lostTime/contactName`；description 过短返回
-  `code=-1`"发布内容过于简单"；userId 可省略（服务端从 token 解析）；
-  ⚠️ 发布成功响应**不返回物品 ID**，需按标题回查列表定位
+- 物品列表/搜索：`GET /api/lost-item/page`；分页参数为 `currentPage`/`size`
+  （源码确认），响应分页字段为 `records/total/size/current/pages`
+- 筛选参数为 `title` / `categoryId` / `status` / `userId`（API 文档 v3.3 源码确认；
+  ⚠️ **无 `keyword` 参数**，初版误用已修正）；`title` 留空=不筛选；`categoryId`
+  筛选有效，不存在的分类返回空列表
+- ⚠️ 发布物品：`POST /api/lost-item`（**不是** `/api/lost-item/add`），请求体字段
+  `title/categoryId/lostPlace/lostTime/description/images/contactName/contactPhone`
+  （API 文档 v3.3 源码确认；⚠️ `contactEmail`/`status` 后端实体无此字段，已从代码
+  移除）；description 过短返回 `code=-1`"发布内容过于简单"；userId 可省略
+  （服务端从 token 解析）；⚠️ 发布成功响应**不返回物品 ID**，需按标题回查列表定位
 - ⚠️ 编辑：`PUT /api/lost-item/{id}`；删除：`DELETE /api/lost-item/{id}`
   （**不是** `/delete/{id}`）；删除后回查返回 `code=-1`（非 HTTP 404）
 - ⚠️ 发起认领：`POST /api/claim`，body `{itemId, itemType, description}`，
@@ -37,9 +39,10 @@
 - ⚠️ 发布标题长度（Day10 实测）：**≥2 且 ≤100 字符**（1 字符"不能少于2个字符"、
   101+ 字符"不能超过100个字符"；50/51 字符均可发布，旧文档"1-50 字符"不准确）；
   空标题 / 缺 categoryId / 过短 description 均被拒绝
-- ⚠️ 注册接口暂不可用（Day10 实测）：`POST /api/user/register` 任意参数组合
-  均返回 `code=500`"系统错误"（含 GET）——后端缺陷，注册入库用例与 temp_user
-  fixture 已做 skip 保护，修复后自动恢复
+- 注册：`POST /api/user/add`（公开；API 文档 v3.3 源码确认，⚠️ 初版误用
+  `/api/user/register`——接口不存在返回 500，已修正）；必填 `username`(3-50位
+  字母数字)/`password`/`email`(唯一)/`name` + `agreementAccepted=true`；
+  注册入库用例（test_db_checks.py）在数据库可达时启用
 
 ## 目录结构
 
@@ -112,4 +115,5 @@ allure serve ./allure-results
 | Day9 | test_items.py / test_search.py / test_claims.py 用例（20 条） | `feat: add test_items and test_claims` |
 | Day10 | 参数化数据驱动（22 组）+ db_utils.py 数据库校验 + fixture 数据隔离 | `feat: 添加数据驱动测试(22组参数)和数据库校验工具，优化fixture数据隔离` |
 | Day11 | Allure 报告深度定制：step/attach、environment.properties、categories.json、失败自动附加 | `feat: Allure 报告深度定制（attach/环境信息/缺陷分类/失败自动附加）` |
+| 08-06 契约修正 | 按 API 文档 v3.3 修正接口契约：列表筛选 keyword→title、注册 /api/user/register→/api/user/add、物品请求体去 contactEmail/status | `fix: 按API文档v3.3修正接口契约（列表筛选keyword→title、注册改/api/user/add、物品请求体移除contactEmail/status）` |
 | Day13 | Jenkins 集成接口测试 + Allure 报告 | `ci: integrate jenkins and allure report` |

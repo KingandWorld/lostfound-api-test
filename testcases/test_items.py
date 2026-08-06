@@ -1,8 +1,9 @@
 """物品模块接口测试（Day9）：列表 / 详情 / 发布 / 编辑 / 删除，共 10 条；Day10 新增参数化发布校验 10 组。
 
-已实测契约（2026-08-03 / 2026-08-04 对真实后端探测确认）：
-- 发布：POST /api/lost-item（前端实际路径），必填 title/description/categoryId/
-  lostTime/contactName，description 过短返回 code=-1"发布内容过于简单"；
+接口契约（以 week1_day6 示例-失物招领系统API文档 v3.3 源码确认版为准，2026-08-06 修订）：
+- 发布：POST /api/lost-item（前端实际路径），请求体字段 title/categoryId/lostPlace/
+  lostTime/description/images/contactName/contactPhone（contactEmail/status 后端实体
+  无此字段，已从请求体移除）；description 过短返回 code=-1"发布内容过于简单"；
   userId 可省略（服务端从 token 解析）；
 - 发布成功响应不含物品 ID（data 为提示字符串），需按标题回查列表拿 ID（_find_item）；
 - 列表分页参数为 currentPage/size（page/pageSize 被忽略），响应分页字段为 total；
@@ -34,10 +35,11 @@ def _request(session, method, url, **kwargs):
 
 
 def _item_payload(title: str, category_id, **overrides) -> dict:
-    """构造发布/编辑物品请求体（字段与校验规则已实测）。
+    """构造发布/编辑物品请求体（字段以 API 文档 v3.3 源码确认为准）。
 
     注意：categoryId 必填（缺失返回 code=-1"分类无效"）；
-    description 需足够详细（过短返回 code=-1"发布内容过于简单"）。
+    description 需足够详细（过短返回 code=-1"发布内容过于简单"）；
+    contactEmail/status 后端实体无此字段（Jackson 静默忽略），不传。
     """
     payload = {
         "title": title,
@@ -47,10 +49,9 @@ def _item_payload(title: str, category_id, **overrides) -> dict:
         "categoryId": category_id,
         "lostPlace": "测试地点-图书馆二楼自习区",
         "lostTime": "2026-08-01 12:00:00",
+        "images": "",
         "contactName": "测试联系人",
         "contactPhone": "13800000000",
-        "contactEmail": "test@test.com",
-        "status": 0,
     }
     payload.update(overrides)
     return payload

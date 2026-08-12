@@ -4,7 +4,30 @@
 （第2周 Day8 起搭建，配套文档：`示例/week2_day8_示例-项目搭建与运行手册.md`、
 `示例/week2_day9_示例-接口用例扩展开发手册.md`、
 `示例/week2_day10_示例-数据驱动与数据库校验开发手册.md`、
-`示例/week2_day11_示例-Allure报告深度定制开发手册.md`）。
+`示例/week2_day11_示例-Allure报告深度定制开发手册.md`、
+`示例/week2_day12_示例-接口自动化套件验收开发手册.md`）。
+
+## 测试覆盖（Day12 验收版，55 条用例）
+
+| 模块 | 用例数 | 说明 |
+|------|:------:|------|
+| 认证（登录/注册） | 12 | 正常/异常/参数化 7 组（Day8+Day10） |
+| 物品管理（CRUD） | 20 | 列表/详情/发布/编辑/删除 + 参数化 10 组（Day9+Day10） |
+| 物品搜索 | 10 | 关键词/分类/分页 + 参数化 5 组（Day9+Day10） |
+| 认领管理 | 5 | 发起/重复/自己物品/无效物品/状态（Day9） |
+| 数据库校验 | 4 | 注册入库/发布入库/删除出库/登录更新（Day10，DB 不可达时跳过） |
+| **端到端场景** | **4** | 招领发布/认领全流程/用户管理/物品生命周期（**Day12 新增**） |
+| 框架演示 | 1 | 失败自动附加演示（allure_demo 标记，默认不运行） |
+
+端到端场景（`testcases/test_e2e.py`，`@pytest.mark.e2e`）覆盖核心业务流程完整链路：
+- **招领发布流程**：注册 → 登录被"待审核"拦截（业务规则验收）→ 已审核账号登录 → 发布 → 搜索 → 详情 → 清理；
+- **认领全流程**：用户A发布 → 用户B登录搜索 → 发起认领 → 用户A查看申请 → 审核通过 → 物品状态变"已认领" → 清理；
+- **用户管理流程**：查看个人信息 → 修改 name → 验证生效 → 还原；
+- **物品生命周期**：发布 → 列表 → 详情 → 编辑 → 查看变更 → 删除 → 确认删除。
+认领流程需要两个已审核账号：用户B 配置在 `.env` 的 `E2E_USERNAME`/`E2E_PASSWORD`
+（新注册用户会被"待审核"拦截，无法登录——已作为业务规则在用例中验证）；未配置时
+认领用例跳过。端到端链路较长，类级别配置 `@pytest.mark.flaky(reruns=2, reruns_delay=1)`
+（pytest-rerunfailures）对偶发超时重试兜底。
 
 ## 接口契约（Day6 API 文档 + 2026-08-03 对真实后端实测修正）
 
@@ -30,6 +53,10 @@
   认领自己物品/重复认领/不存在物品均返回 `code=-1` + 提示
 - ⚠️ 认领列表：`GET /api/claim/my`（status 0=待审核、3=已取消）；
   取消认领：`PUT /api/claim/cancel/{id}`
+- ⚠️ 发布者查看"他人对我的认领申请"：`GET /api/claim/page`（返回记录含
+  itemId/itemTitle/username/status 等展示字段）；审核：`PUT /api/claim/audit`，
+  body `{"id":N,"status":1,"auditRemark":""}`，1=通过 2=拒绝；**审核通过后物品
+  状态自动变为 1（已认领）**；已处理认领的物品仍可删除（均 Day12 实测）
 - ⚠️ 系统缺陷（已实测）：物品一旦被认领（即使已取消）仍不能再次认领——
   认领用例从种子物品池动态选取未认领过的他人物品，池子用尽会 skip
 - 未登录请求返回 HTTP `401`"认证失败，请重新登录"
@@ -42,7 +69,12 @@
 - 注册：`POST /api/user/add`（公开；API 文档 v3.3 源码确认，⚠️ 初版误用
   `/api/user/register`——接口不存在返回 500，已修正）；必填 `username`(3-50位
   字母数字)/`password`/`email`(唯一)/`name` + `agreementAccepted=true`；
-  注册入库用例（test_db_checks.py）在数据库可达时启用
+  注册入库用例（test_db_checks.py）在数据库可达时启用；
+  ⚠️ 注册后用户状态为**待审核**，登录返回 code=-1"待审核: 请等待管理员审核..."，
+  需管理员审核通过才能登录（Day12 实测；端到端用例将验证该业务规则，
+  认领流程的用户B 用 .env 的 E2E_USERNAME/E2E_PASSWORD 已审核账号）
+- ⚠️ 用户信息：`GET /api/user/current` 获取当前用户（需 token）；
+  `PUT /api/user/{id}` 更新部分字段（如 `{"name": "xxx"}`）→"更新成功"（Day12 实测）
 
 ## 目录结构
 
@@ -70,6 +102,7 @@ lostfound-api-test/
     ├── test_search.py      # 搜索用例（Day9 5 条 + Day10 参数化 5 组）
     ├── test_claims.py      # 认领用例（Day9，5 条）
     ├── test_db_checks.py   # 数据库校验用例（Day10，4 条；DB 不可达时跳过）
+    ├── test_e2e.py         # 端到端场景用例（Day12，4 条；e2e 标记 + 失败重试）
     └── test_allure_failure_demo.py  # 故意失败的演示用例（Day11，allure_demo 标记，
                                      #   默认不参与全量，验证失败自动附加）
 ```
@@ -116,4 +149,5 @@ allure serve ./allure-results
 | Day10 | 参数化数据驱动（22 组）+ db_utils.py 数据库校验 + fixture 数据隔离 | `feat: 添加数据驱动测试(22组参数)和数据库校验工具，优化fixture数据隔离` |
 | Day11 | Allure 报告深度定制：step/attach、environment.properties、categories.json、失败自动附加 | `feat: Allure 报告深度定制（attach/环境信息/缺陷分类/失败自动附加）` |
 | 08-06 契约修正 | 按 API 文档 v3.3 修正接口契约：列表筛选 keyword→title、注册 /api/user/register→/api/user/add、物品请求体去 contactEmail/status | `fix: 按API文档v3.3修正接口契约（列表筛选keyword→title、注册改/api/user/add、物品请求体移除contactEmail/status）` |
+| Day12 | 接口自动化套件验收：test_e2e.py 端到端 4 条（招领发布/认领全流程/用户管理/物品生命周期）+ 失败重试 + README 补全 | `feat: 端到端测试用例（覆盖核心业务流程完整链路）与套件验收` |
 | Day13 | Jenkins 集成接口测试 + Allure 报告 | `ci: integrate jenkins and allure report` |

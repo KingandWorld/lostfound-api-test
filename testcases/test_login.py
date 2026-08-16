@@ -4,7 +4,8 @@
 - 登录正是被测对象，因此本文件用例直接使用 api_session 发裸请求，
   不依赖 login_token（否则"先登录成功再测登录"没有意义）；
 - login_token fixture 的正确性由 test_login_token_fixture_works 单独验证，供 Day9 复用；
-- 学习阶段：后端不可达时用例自动跳过（见 _request），接入 Jenkins 前建议改为直接失败；
+- 环境不可达（后端）：学习模式自动跳过（见 _request）；CI 模式（CI=1，Jenkins）
+  直接失败（Day13 已实现，见 utils/ci_guard.py）；
 - 断言中出现的字段名（username、token）以实际接口返回为准，不符时打印响应修正。
 
 Day10 参数化校验（对真实后端 2026-08-04 实测确认的契约）：
@@ -22,15 +23,16 @@ import pytest
 import requests
 
 from utils.allure_helper import attach_request_response
+from utils.ci_guard import guard_unreachable  # Day13：环境不可达统一出口（学习模式跳过 / CI 模式失败）
 
 
 def _request(session, method, url, **kwargs):
-    """发送请求；后端不可达时跳过用例，避免环境问题中断学习流程。"""
+    """发送请求；后端不可达时按环境模式处理（学习模式跳过 / CI 模式失败，Day13）。"""
     kwargs.setdefault("timeout", 10)
     try:
         return session.request(method, url, **kwargs)
     except requests.exceptions.RequestException as exc:
-        pytest.skip(f"后端不可达，跳过真实请求: {exc}")
+        guard_unreachable(exc)
 
 
 @allure.feature("用户认证")

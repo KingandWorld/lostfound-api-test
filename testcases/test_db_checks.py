@@ -17,15 +17,21 @@ import requests
 
 from utils.allure_helper import attach_request_response
 from utils.db_utils import DBUtils
+from utils.ci_guard import guard_unreachable  # Day13：环境不可达统一出口（学习模式跳过 / CI 模式失败）
 
 
 @pytest.fixture(scope="session")
 def db_conn():
-    """连接数据库；不可达时跳过（Day10 预案：用 API 响应验证替代）。"""
+    """连接数据库；不可达时跳过（Day10 预案：用 API 响应验证替代）。
+
+    学习模式：跳过（pytest.skip）；CI 模式（CI=1，Jenkins）：直接失败
+    （Day13，见 utils/ci_guard.py）——服务器上 MySQL 与本机可达性不同，
+    CI 中数据库问题必须暴露。
+    """
     try:
         db = DBUtils()
     except Exception as exc:  # pymysql 各类连接错误（超时/拒绝/账号）
-        pytest.skip(f"数据库不可达，跳过数据库校验用例，以 API 响应验证替代: {exc}")
+        guard_unreachable(exc, "数据库")
     yield db
     db.close()
 
@@ -36,7 +42,7 @@ def _request(session, method, url, **kwargs):
     try:
         return session.request(method, url, **kwargs)
     except requests.exceptions.RequestException as exc:
-        pytest.skip(f"后端不可达，跳过真实请求: {exc}")
+        guard_unreachable(exc)
 
 
 def _find_item(api_session, base_url, title, max_pages=5):

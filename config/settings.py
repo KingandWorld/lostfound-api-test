@@ -21,3 +21,7 @@ DB_HOST = os.getenv("DB_HOST")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
+# Day13 新增：CI 模式（Jenkins 构建脚本导出 CI=1 后开启）——学习阶段后端/数据库
+# 不可达时用例跳过（避免环境问题中断学习）；CI 中环境不可达必须暴露为构建失败，
+# 不允许静默跳过（统一出口见 utils/ci_guard.py）
+CI_MODE = os.getenv("CI", "").strip().lower() in ("1", "true", "yes", "on")

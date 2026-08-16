@@ -17,6 +17,7 @@ import pytest
 import requests
 
 from utils.allure_helper import attach_request_response
+from utils.ci_guard import guard_unreachable  # Day13：环境不可达统一出口（学习模式跳过 / CI 模式失败）
 
 
 def _request(session, method, url, **kwargs):
@@ -25,7 +26,7 @@ def _request(session, method, url, **kwargs):
     try:
         return session.request(method, url, **kwargs)
     except requests.exceptions.RequestException as exc:
-        pytest.skip(f"后端不可达，跳过真实请求: {exc}")
+        guard_unreachable(exc)
 
 
 def _find_item(api_session, base_url, title, max_pages=5):

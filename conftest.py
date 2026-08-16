@@ -34,6 +34,7 @@ from utils.allure_helper import (
     has_attached_in_test,
     reset_for_test,
 )
+from utils.ci_guard import guard_unreachable  # Day13：环境不可达的统一出口（学习模式跳过 / CI 模式失败）
 
 
 @pytest.fixture(scope="session")
@@ -54,8 +55,8 @@ def api_session():
 def login_token(api_session, base_url):
     """只登录一次，把 token 写入 session headers（自定义 Header `token`，非 Bearer）。
 
-    学习阶段：后端不可达时跳过（见 pytest.skip），避免环境问题中断学习；
-    接入 Jenkins 前，建议将不可达场景改为直接失败。
+    学习模式：后端不可达时跳过（避免环境问题中断学习）；
+    CI 模式（CI=1，Jenkins）：后端不可达直接失败（Day13，见 utils/ci_guard.py）。
     """
     try:
         resp = api_session.post(
@@ -64,7 +65,7 @@ def login_token(api_session, base_url):
             timeout=10,
         )
     except requests.exceptions.RequestException as exc:
-        pytest.skip(f"后端不可达，跳过依赖登录的用例: {exc}")
+        guard_unreachable(exc)
     body = resp.json()
     assert body.get("code") == "200", f"登录失败: {body}"
     token = body["data"]["token"]
@@ -89,7 +90,7 @@ def first_category_id(api_session, base_url):
     try:
         resp = api_session.get(f"{base_url}/api/category/list", timeout=10)
     except requests.exceptions.RequestException as exc:
-        pytest.skip(f"后端不可达，跳过依赖分类数据的用例: {exc}")
+        guard_unreachable(exc, "后端")
     categories = resp.json().get("data") or []
     if not categories:
         pytest.skip("系统无分类数据，发布物品用例无法构造合法请求")
@@ -170,7 +171,7 @@ def temp_item(api_session, base_url, first_category_id):
         body = resp.json()
         assert body.get("code") == "200", f"发布临时物品失败: {body}"
     except requests.exceptions.RequestException as exc:
-        pytest.skip(f"后端不可达，跳过依赖前置数据的用例: {exc}")
+        guard_unreachable(exc, "后端")
     item_id = None
     for page in range(1, 6):
         page_resp = api_session.get(
@@ -246,7 +247,7 @@ def published_item_id(api_session, base_url, first_category_id):
                 break
         assert item_id, f"发布后未按标题回查到物品: {title}"
     except requests.exceptions.RequestException as exc:
-        pytest.skip(f"后端不可达，跳过依赖前置数据的用例: {exc}")
+        guard_unreachable(exc, "后端")
     yield {"id": item_id, "title": title, "category_id": first_category_id}
     # teardown：会话结束删除，避免污染后续天数的数据
     api_session.delete(f"{base_url}/api/lost-item/{item_id}", timeout=10)

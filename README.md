@@ -5,7 +5,8 @@
 `示例/week2_day9_示例-接口用例扩展开发手册.md`、
 `示例/week2_day10_示例-数据驱动与数据库校验开发手册.md`、
 `示例/week2_day11_示例-Allure报告深度定制开发手册.md`、
-`示例/week2_day12_示例-接口自动化套件验收开发手册.md`）。
+`示例/week2_day12_示例-接口自动化套件验收开发手册.md`、
+`示例/week2_day13_示例-Jenkins集成开发手册.md`）。
 
 ## 测试覆盖（Day12 验收版，55 条用例）
 
@@ -94,8 +95,9 @@ lostfound-api-test/
 ├── utils/
 │   ├── api_client.py       # requests 封装（Base URL + token 注入）
 │   ├── db_utils.py         # 数据库工具（Day10：DBUtils 查询/断言封装）
-│   └── allure_helper.py    # Allure 附件辅助（Day11：attach_request_response /
-│                           #   remember_response / 失败自动附加记录）
+│   ├── allure_helper.py    # Allure 附件辅助（Day11：attach_request_response /
+│   │                       #   remember_response / 失败自动附加记录）
+│   └── ci_guard.py         # CI 模式守卫（Day13：环境不可达时学习模式跳过 / CI 模式失败）
 └── testcases/
     ├── test_login.py       # 登录用例（Day8 5 条 + Day10 参数化 7 组）
     ├── test_items.py       # 物品用例（Day9 10 条 + Day10 参数化 10 组）
@@ -121,6 +123,28 @@ lostfound-api-test/
   最近一次请求/响应详情（已附加过则避免重复）；
 - **演示用例**：`pytest -m allure_demo --alluredir=./allure-results-demo` 单独运行
   故意失败的演示用例，验证失败自动附加生效（该用例默认不参与全量运行）。
+
+## Jenkins / CI 集成（Day13）
+
+代码已推送双远程仓库，Jenkins 自由风格项目拉取后自动执行"安装依赖 → 生成 .env →
+跑 pytest → 生成 Allure 报告"：
+
+| 项 | 值 |
+|----|----|
+| Gitee 仓库 | `https://gitee.com/novaforge/lostfound-api-test.git`（main 分支） |
+| GitHub 仓库 | `https://github.com/KingandWorld/lostfound-api-test.git`（main 分支） |
+| 构建环境 | 4G 轻量云服务器（CentOS 7），Jenkins 自由风格项目 `lostfound-api-test`，`http://<服务器IP>:8082` |
+| 标签 | `v1.0`=Day8~10 功能基线、`v1.1`=Day12 套件验收版、`v1.2`=Day13 CI 集成版 |
+
+- **CI 模式**：Jenkins 构建脚本导出 `CI=1` 后，后端/数据库不可达时用例**直接失败**
+  而不是跳过（学习模式默认跳过）——环境挂掉时构建必须红，不允许假绿灯；
+  统一出口 `utils/ci_guard.py::guard_unreachable`（学习模式 `pytest.skip` / CI 模式
+  `raise AssertionError`），本地开发不导出 `CI` 时行为与 Day8~12 完全一致；
+- **敏感信息**：`.env` 不入库（.gitignore），构建脚本从 Jenkins 凭据/环境变量现场
+  生成；`.env.example` 只放占位符；
+- **稳定性**：端到端用例类级别 `@pytest.mark.flaky(reruns=2, reruns_delay=1)` 重试
+  兜底（pytest-rerunfailures），其余用例不加重试（避免掩盖真实缺陷）；
+- 构建脚本、Allure 插件配置等完整步骤见 `示例/week2_day13_示例-Jenkins集成开发手册.md`。
 
 ## 快速开始
 

@@ -16,7 +16,7 @@
 | 物品管理（CRUD） | 20 | 列表/详情/发布/编辑/删除 + 参数化 10 组（Day9+Day10） |
 | 物品搜索 | 10 | 关键词/分类/分页 + 参数化 5 组（Day9+Day10） |
 | 认领管理 | 5 | 发起/重复/自己物品/无效物品/状态（Day9） |
-| 数据库校验 | 4 | 注册入库/发布入库/删除出库/登录更新（Day10，DB 不可达时跳过） |
+| 数据库校验 | 4 | 注册入库/发布入库/删除出库/登录更新（Day10；2026-08-16 起经 SSH 隧道连通真实库，4/4 通过） |
 | **端到端场景** | **4** | 招领发布/认领全流程/用户管理/物品生命周期（**Day12 新增**） |
 | 框架演示 | 1 | 失败自动附加演示（allure_demo 标记，默认不运行） |
 
@@ -70,7 +70,8 @@
 - 注册：`POST /api/user/add`（公开；API 文档 v3.3 源码确认，⚠️ 初版误用
   `/api/user/register`——接口不存在返回 500，已修正）；必填 `username`(3-50位
   字母数字)/`password`/`email`(唯一)/`name` + `agreementAccepted=true`；
-  注册入库用例（test_db_checks.py）在数据库可达时启用；
+  注册入库用例（test_db_checks.py）在数据库可达时启用（SSH 隧道连通后即启用，见
+  「数据库连接」章节）；
   ⚠️ 注册后用户状态为**待审核**，登录返回 code=-1"待审核: 请等待管理员审核..."，
   需管理员审核通过才能登录（Day12 实测；端到端用例将验证该业务规则，
   认领流程的用户B 用 .env 的 E2E_USERNAME/E2E_PASSWORD 已审核账号）
@@ -89,7 +90,8 @@ lostfound-api-test/
 │                           #   / unique_username / temp_item / published_item_id；
 │                           #   Day11 钩子：environment.properties 自动生成 /
 │                           #   categories.json 注入 / 失败用例自动附加请求响应
-├── config/settings.py      # python-dotenv 加载 .env（含 DB_* 连接信息）
+├── config/settings.py      # python-dotenv 加载 .env（含 DB_HOST / DB_PORT 等 DB_* 连接信息）
+├── start-db-tunnel.bat     # 一键开启数据库 SSH 隧道（见「数据库连接」章节）
 ├── allure/
 │   └── categories.json     # 自定义缺陷分类模板（Day11，注入 allure-results 后生效）
 ├── utils/
@@ -103,7 +105,7 @@ lostfound-api-test/
     ├── test_items.py       # 物品用例（Day9 10 条 + Day10 参数化 10 组）
     ├── test_search.py      # 搜索用例（Day9 5 条 + Day10 参数化 5 组）
     ├── test_claims.py      # 认领用例（Day9，5 条）
-    ├── test_db_checks.py   # 数据库校验用例（Day10，4 条；DB 不可达时跳过）
+    ├── test_db_checks.py   # 数据库校验用例（Day10，4 条；表结构已对齐真实库 user/update_time）
     ├── test_e2e.py         # 端到端场景用例（Day12，4 条；e2e 标记 + 失败重试）
     └── test_allure_failure_demo.py  # 故意失败的演示用例（Day11，allure_demo 标记，
                                      #   默认不参与全量，验证失败自动附加）
@@ -159,10 +161,34 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 # 3. 配置环境变量
 #    复制 .env.example 为 .env，填写 BASE_URL / 测试账号 / 数据库信息
 
-# 4. 运行测试并生成 Allure 报告
+# 4. 开启数据库 SSH 隧道（数据库校验用例需要；API 用例不需要）
+#    Windows 双击 start-db-tunnel.bat（保持窗口开着），或手动执行：
+#    ssh -N -L 13306:127.0.0.1:3306 root@<服务器IP>
+
+# 5. 运行测试并生成 Allure 报告
 pytest
 allure serve ./allure-results
 ```
+
+## 数据库连接（SSH 隧道，2026-08-16 起生效）
+
+数据库校验用例（test_db_checks.py）需要连接服务器 MySQL（`lost_found_db`）。
+服务器 MySQL 出于安全仅监听本机（bind-address=127.0.0.1）且 ufw 未放行 3306、
+`lost_found_user` 仅授权 `@'localhost'`，**远程直连不可行**——本方案用 SSH 隧道，
+从服务器本机发起连接，天然匹配 localhost 授权，**零服务器配置改动、零安全风险**。
+
+```text
+本机 pytest (pymysql) ──> 127.0.0.1:13306 ──SSH 隧道──> 服务器 127.0.0.1:3306 ──> lost_found_db
+```
+
+| 项 | 值 | 说明 |
+|----|----|------|
+| 隧道命令 | `ssh -N -L 13306:127.0.0.1:3306 root@<服务器IP>` | Windows 一键：双击 `start-db-tunnel.bat`（关窗口=关隧道；该脚本为本机工具，已 gitignore 不入库，真实 IP 自行填写） |
+| .env | `DB_HOST=127.0.0.1` / `DB_PORT=13306` | ⚠️ 本机也装有 MySQL 占用 3306，所以隧道必须用 **13306**，不要用 3306 |
+| 凭据 | `lost_found_user` / `lost_found_db`（与后端应用同一账号） | 见 .env，不入库 |
+| 真实库结构 | 表名 `user`（**单数**，非 users）；登录时间用 `update_time`（无 lastLoginTime） | test_db_checks.py 已按真实结构对齐 |
+
+隧道未开启时：数据库校验用例按 Day10 预案跳过（学习模式），其余 API 用例不受影响。
 
 ## 开发节奏
 

@@ -18,6 +18,8 @@ TEST_PASSWORD = os.getenv("TEST_PASSWORD")
 E2E_USERNAME = os.getenv("E2E_USERNAME")
 E2E_PASSWORD = os.getenv("E2E_PASSWORD")
 DB_HOST = os.getenv("DB_HOST")
+# DB_PORT：默认 3306；本机跑测试经 SSH 隧道时写 13306（避开本机 MySQL 占用 3306）
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")

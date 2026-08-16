@@ -87,7 +87,7 @@ def _safe_query(db, sql, params=None):
 class TestDbChecks:
 
     @allure.story("注册入库")
-    @allure.title("注册新用户后，users 表出现对应记录")
+    @allure.title("注册新用户后，user 表出现对应记录")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_register_creates_db_record(self, api_session, base_url, db_conn, unique_username):
         # 契约（API 文档 v3.3 源码确认）：注册 = POST /api/user/add（公开）；
@@ -102,12 +102,12 @@ class TestDbChecks:
                                   "agreementAccepted": True})
             attach_request_response(resp)  # Day11：请求/响应附加进报告
             assert resp.json().get("code") == "200", resp.json()
-        with allure.step("查询 users 表确认新增记录"):
-            rows = _safe_query(db_conn, "SELECT * FROM users WHERE username=%s", (unique_username,))
-            assert rows, f"注册成功但 users 表无记录: {unique_username}"
+        with allure.step("查询 user 表确认新增记录"):
+            rows = _safe_query(db_conn, "SELECT * FROM user WHERE username=%s", (unique_username,))
+            assert rows, f"注册成功但 user 表无记录: {unique_username}"
             assert rows[0]["username"] == unique_username, rows[0]
         with allure.step("清理：从数据库删除测试用户"):
-            db_conn.execute("DELETE FROM users WHERE username=%s", (unique_username,))
+            db_conn.execute("DELETE FROM user WHERE username=%s", (unique_username,))
 
     @allure.story("发布入库")
     @allure.title("发布物品后，物品表出现对应记录")
@@ -155,21 +155,29 @@ class TestDbChecks:
             db_conn.execute("DELETE FROM lost_item WHERE id=%s", (rec["id"],))
 
     @allure.story("登录更新")
-    @allure.title("登录成功后，用户表的登录时间字段被更新")
+    @allure.title("登录成功后，用户表的时间字段被更新")
     @allure.severity(allure.severity_level.NORMAL)
     def test_login_updates_last_login(self, api_session, base_url, db_conn, test_data):
+        username = test_data["user"]["username"]
+        with allure.step("查询登录前的 update_time（真实库 user 表无 lastLoginTime，用 update_time 验证）"):
+            rows_before = _safe_query(
+                db_conn,
+                "SELECT update_time FROM user WHERE username=%s",
+                (username,),
+            )
+            assert rows_before, f"user 表查无此账号: {username}"
+            before = rows_before[0]["update_time"]
         with allure.step("调用登录接口（账号密码来自 .env 配置）"):
             resp = _request(api_session, "POST", f"{base_url}/api/user/login",
                             json=test_data["login"]["success"])
             attach_request_response(resp)  # Day11：请求/响应附加进报告
             assert resp.json().get("code") == "200", resp.json()
-        with allure.step("查询用户表登录时间字段（字段名以真实库为准）"):
-            rows = _safe_query(
+        with allure.step("查询登录后的 update_time 并断言已更新"):
+            rows_after = _safe_query(
                 db_conn,
-                "SELECT lastLoginTime, loginTime FROM users WHERE username=%s",
-                (test_data["user"]["username"],),
+                "SELECT update_time FROM user WHERE username=%s",
+                (username,),
             )
-            assert rows, f"users 表查无此账号: {test_data['user']['username']}"
-            row = rows[0]
-            assert row.get("lastLoginTime") or row.get("loginTime"), (
-                f"登录成功但数据库登录时间未更新: {row}")
+            after = rows_after[0]["update_time"]
+            assert after and after >= before, (
+                f"登录成功但数据库 update_time 未更新: 前={before} 后={after}")

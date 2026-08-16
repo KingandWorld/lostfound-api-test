@@ -4,14 +4,18 @@
 面试常问"接口测试怎么验证数据真的写进去了"即用此工具回答。
 
 约定：
-- 连接信息统一从 config.settings 读取（.env 中的 DB_HOST / DB_USER /
-  DB_PASSWORD / DB_NAME），与 BASE_URL 同源，切换环境零改动；
-- 本机与数据库不可达时（bind-address 限制/未开防火墙），连接会抛
-  OperationalError，由调用方（test_db_checks.py 的 db_conn fixture）捕获并
-  pytest.skip——数据库校验是进阶内容，连不上时用 API 响应验证替代（见
-  week2_day10.md 任务二第 5 条预案）；
-- 真实库表名/字段名可能与下面的假设不同（本示例按 users / lost_item 的
-  常规命名编写），接入真实库后先 SELECT * FROM xxx LIMIT 1 核对结构。
+- 连接信息统一从 config.settings 读取（.env 中的 DB_HOST / DB_PORT /
+  DB_USER / DB_PASSWORD / DB_NAME），与 BASE_URL 同源，切换环境零改动；
+- 本机连服务器 MySQL 用 SSH 隧道（服务器 bind-address=127.0.0.1 +
+  防火墙未放行 3306 + 账号仅 localhost 授权，远程直连不可行）：
+  `ssh -N -L 13306:127.0.0.1:3306 root@<服务器IP>`（Windows 双击
+  start-db-tunnel.bat），.env 配 DB_HOST=127.0.0.1 / DB_PORT=13306
+  （⚠️ 本机若装有 MySQL 会占用 3306，所以隧道必须用 13306）；
+- 隧道未开/数据库不可达时，连接会抛 OperationalError，由调用方
+  （test_db_checks.py 的 db_conn fixture）捕获并 pytest.skip——数据库校验
+  是进阶内容，连不上时用 API 响应验证替代（见 week2_day10.md 任务二第 5 条预案）；
+- 真实库表结构（2026-08-16 核对）：表名 user（单数，非 users）；登录时间
+  用 update_time（无 lastLoginTime/loginTime）；lost_item 表字段齐全。
 
 用法：
     from utils.db_utils import DBUtils
@@ -23,7 +27,7 @@
 
 import pymysql
 
-from config.settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_USER
+from config.settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
 
 
 class DBUtils:
@@ -32,6 +36,7 @@ class DBUtils:
     def __init__(self, autocommit=True):
         self.conn = pymysql.connect(
             host=DB_HOST,
+            port=DB_PORT,
             user=DB_USER,
             password=DB_PASSWORD,
             database=DB_NAME,

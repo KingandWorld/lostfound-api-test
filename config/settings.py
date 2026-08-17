@@ -27,3 +27,9 @@ DB_NAME = os.getenv("DB_NAME")
 # 不可达时用例跳过（避免环境问题中断学习）；CI 中环境不可达必须暴露为构建失败，
 # 不允许静默跳过（统一出口见 utils/ci_guard.py）
 CI_MODE = os.getenv("CI", "").strip().lower() in ("1", "true", "yes", "on")
+# Day14 新增：腾讯云 COS 配置（Day19 上传 Allure 报告用；scripts/cos_upload_check.py
+# 验证上传权限）。SecretKey 与密码同级敏感，只放 .env（.gitignore 已排除），不入库
+COS_SECRET_ID = os.getenv("COS_SECRET_ID")
+COS_SECRET_KEY = os.getenv("COS_SECRET_KEY")
+COS_BUCKET = os.getenv("COS_BUCKET")
+COS_REGION = os.getenv("COS_REGION")

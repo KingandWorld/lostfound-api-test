@@ -8,7 +8,7 @@
 用法：
     python scripts/playwright_smoke.py                # 默认打开百度，只打印标题
     python scripts/playwright_smoke.py --screenshot    # 额外截图保存到 screenshots/playwright_smoke.png
-    python scripts/playwright_smoke.py --url https://www.zang1357.chat   # 换成目标站点
+    python scripts/playwright_smoke.py --url https://<目标站点>   # 换成目标站点（示例占位，勿填真实域名）
 
 环境要求（Day14 手册第 3 步）：
     pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple

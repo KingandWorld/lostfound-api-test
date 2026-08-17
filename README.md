@@ -6,7 +6,8 @@
 `示例/week2_day10_示例-数据驱动与数据库校验开发手册.md`、
 `示例/week2_day11_示例-Allure报告深度定制开发手册.md`、
 `示例/week2_day12_示例-接口自动化套件验收开发手册.md`、
-`示例/week2_day13_示例-Jenkins集成开发手册.md`）。
+`示例/week2_day13_示例-Jenkins集成开发手册.md`、
+`示例/week2_day14_示例-中期复盘与资源调整手册.md`）。
 
 ## 测试覆盖（Day12 验收版，55 条用例）
 
@@ -100,6 +101,9 @@ lostfound-api-test/
 │   ├── allure_helper.py    # Allure 附件辅助（Day11：attach_request_response /
 │   │                       #   remember_response / 失败自动附加记录）
 │   └── ci_guard.py         # CI 模式守卫（Day13：环境不可达时学习模式跳过 / CI 模式失败）
+├── scripts/                # 独立工具脚本（Day14，不参与 pytest 用例收集）
+│   ├── playwright_smoke.py #   Playwright 环境自检（Day15 UI 自动化预热）
+│   └── cos_upload_check.py #   COS 上传权限验证（Day19 Allure 报告上传预热）
 └── testcases/
     ├── test_login.py       # 登录用例（Day8 5 条 + Day10 参数化 7 组）
     ├── test_items.py       # 物品用例（Day9 10 条 + Day10 参数化 10 组）
@@ -147,6 +151,19 @@ lostfound-api-test/
 - **稳定性**：端到端用例类级别 `@pytest.mark.flaky(reruns=2, reruns_delay=1)` 重试
   兜底（pytest-rerunfailures），其余用例不加重试（避免掩盖真实缺陷）；
 - 构建脚本、Allure 插件配置等完整步骤见 `示例/week2_day13_示例-Jenkins集成开发手册.md`。
+
+## Day14 预习脚本与资源决策
+
+休息调整日沉淀的工具与决策（详见 `示例/week2_day14_示例-中期复盘与资源调整手册.md`）：
+
+| 项 | 说明 |
+|----|------|
+| `scripts/playwright_smoke.py` | Playwright 环境自检：打开页面 → 打印标题 → 可选截图。`python scripts/playwright_smoke.py --screenshot`（Day15 UI 自动化预热，本地实测通过） |
+| `scripts/cos_upload_check.py` | COS 上传权限验证：上传测试文件确认写入权限。运行前把 `.env.example` 的 `COS_*` 段填入 `.env`（Day19 Allure 报告上传预热） |
+| COS 配置 | `config/settings.py` 新增 `COS_SECRET_ID` / `COS_SECRET_KEY` / `COS_BUCKET` / `COS_REGION`（只放 .env，不入库） |
+| 资源决策 | **方案C（混合）**：接口测试跑服务器 Jenkins CI，UI 测试本地运行后手动合并 Allure——4G 服务器上 headless Chromium（500MB-1GB）会导致 OOM，本地 Agent 不便面试展示，混合方案务实折中且面试可讲"考虑资源限制后的架构取舍" |
+
+**注意**：Playwright / cos-python-sdk-v5 只装在本地 venv，**未加入 requirements.txt**——Jenkins CI 只跑接口测试，不加 UI 依赖避免拖慢构建（UI 测试按方案C在本地运行，Day15 起单独管理依赖）。
 
 ## 快速开始
 
@@ -201,3 +218,5 @@ allure serve ./allure-results
 | 08-06 契约修正 | 按 API 文档 v3.3 修正接口契约：列表筛选 keyword→title、注册 /api/user/register→/api/user/add、物品请求体去 contactEmail/status | `fix: 按API文档v3.3修正接口契约（列表筛选keyword→title、注册改/api/user/add、物品请求体移除contactEmail/status）` |
 | Day12 | 接口自动化套件验收：test_e2e.py 端到端 4 条（招领发布/认领全流程/用户管理/物品生命周期）+ 失败重试 + README 补全 | `feat: 端到端测试用例（覆盖核心业务流程完整链路）与套件验收` |
 | Day13 | Jenkins 集成接口测试 + Allure 报告 | `ci: integrate jenkins and allure report` |
+| 08-16 隧道连通 | 数据库校验经 SSH 隧道连通并对齐真实表结构（user/update_time） | `feat: 数据库校验经SSH隧道连通并对齐真实表结构（user/update_time）` |
+| Day14 | 中期复盘与资源调整：scripts/ 预习脚本（Playwright 环境自检 / COS 上传验证）、COS_* 配置、资源决策（方案C 混合：接口 CI + UI 本地） | `feat: 中期复盘与资源调整（Day14 预习脚本与资源决策）` |

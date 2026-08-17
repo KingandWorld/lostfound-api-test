@@ -10,3 +10,5 @@ allure-results*/
 allure-report/
 *.log
 start-db-tunnel.bat
+# Day14：Playwright 预习脚本的截图产物（scripts/playwright_smoke.py --screenshot）
+screenshots/

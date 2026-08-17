@@ -54,10 +54,13 @@ def main() -> int:
     # 2) 上传测试文件（key 带日期前缀，方便区分与清理）
     key = f"lostfound-api-test/cos_check_{Path(__file__).parent.name}.txt"
     try:
+        # put_object 成功返回即 HTTP 200（失败会抛异常进入 except），
+        # 返回的 dict 不含 HTTPStatusCode 字段（区别于 boto3 的 ResponseMetadata），
+        # 因此状态码不必单独打印，以"上传成功"为准
         response = client.put_object(Bucket=COS_BUCKET, Body=TEST_CONTENT.encode("utf-8"), Key=key)
-        print(f"上传成功: cos://{COS_BUCKET}/{key}")
+        print(f"上传成功: cos://{COS_BUCKET}/{key}（HTTP 200）")
         print(f"ETag: {response.get('ETag', '-')}")
-        print(f"状态码: {response.get('ResponseMetadata', {}).get('HTTPStatusCode', '-')}")
+        print(f"请求 ID: {response.get('x-cos-request-id', '-')}")
         print(f"访问 URL: https://{COS_BUCKET}.cos.{COS_REGION}.myqcloud.com/{key}")
     except Exception as exc:
         print(f"[FAIL] COS 上传失败: {exc}")

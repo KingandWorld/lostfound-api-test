@@ -165,6 +165,15 @@ lostfound-api-test/
 
 **注意**：Playwright / cos-python-sdk-v5 只装在本地 venv，**未加入 requirements.txt**——Jenkins CI 只跑接口测试，不加 UI 依赖避免拖慢构建（UI 测试按方案C在本地运行，Day15 起单独管理依赖）。
 
+## Day15 UI 自动化项目（独立仓库）
+
+UI 测试是**独立项目**（`../lostfound-ui-test-示例/`，Playwright + pytest + Allure + Page Object），
+与本站同用一套测试账号与登录契约（token 存 localStorage、自定义 Header `token`、5 次失败锁定）：
+
+- 项目结构与用例详见 `../../示例/week3_day15_示例-UI自动化框架选型与第一个脚本开发手册.md`；
+- 登录用例 5 条实测 3 轮全绿（headless 15.6~16.8s），Allure 报告本地生成；
+- 本仓库保持**零 UI 依赖**：CI 构建不装 Playwright，接口测试与 UI 测试职责清晰（方案C）。
+
 ## 快速开始
 
 ```bash
@@ -172,7 +181,8 @@ lostfound-api-test/
 python -m venv venv
 venv\Scripts\activate        # Windows；Linux/Mac 用 source venv/bin/activate
 
-# 2. 安装依赖（国内可用清华镜像加速）
+# 2. 安装依赖（国内可用清华镜像加速；⚠️ 2026-08-17 起清华镜像对本机 HTTP 403，
+#    报错时换阿里云：-i https://mirrors.aliyun.com/pypi/simple/）
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 3. 配置环境变量
@@ -220,3 +230,4 @@ allure serve ./allure-results
 | Day13 | Jenkins 集成接口测试 + Allure 报告 | `ci: integrate jenkins and allure report` |
 | 08-16 隧道连通 | 数据库校验经 SSH 隧道连通并对齐真实表结构（user/update_time） | `feat: 数据库校验经SSH隧道连通并对齐真实表结构（user/update_time）` |
 | Day14 | 中期复盘与资源调整：scripts/ 预习脚本（Playwright 环境自检 / COS 上传验证）、COS_* 配置、资源决策（方案C 混合：接口 CI + UI 本地） | `feat: 中期复盘与资源调整（Day14 预习脚本与资源决策）` |
+| Day15 | UI 自动化项目独立化：`lostfound-ui-test-示例/`（Playwright 登录 5 用例 3 轮全绿）；本仓库 README 同步指引，接口/UI 依赖彻底隔离 | `docs: Day15 UI 项目独立化说明（README 同步）` |
